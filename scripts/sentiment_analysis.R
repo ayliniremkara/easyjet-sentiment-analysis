@@ -1,10 +1,14 @@
 # ── 0. Install R packages if needed (run once, then re-comment) ───────────────
-#install.packages(c("readxl", "openxlsx", "reticulate"))
+# install.packages(c("readxl", "openxlsx", "reticulate", "dplyr", "tm", "wordcloud"))
 
 # ── 1. Load packages ──────────────────────────────────────────────────────────
-library(readxl)     # read Excel for detection + preview
-library(openxlsx)   # load / modify / save workbook in place
-library(reticulate) # bridge to Python / transformers
+library(readxl)       # read Excel for detection + preview
+library(openxlsx)     # load / modify / save workbook in place
+library(reticulate)   # bridge to Python / transformers
+library(dplyr)        # data manipulation
+library(tm)           # text mining and cleaning
+library(wordcloud)    # word cloud visualisation
+library(RColorBrewer) # color palettes for word clouds
 
 # ── 2. Set working directory to the script's folder ───────────────────────────
 tryCatch({
@@ -17,7 +21,6 @@ tryCatch({
 
 # ── 3. Locate Python (hard stop if absent; skip Windows Store stub) ───────────
 py_path <- Sys.which("python")
-# Reject the Windows App Store stub — it is inaccessible and not a real interpreter
 if (grepl("WindowsApps", py_path, fixed = TRUE)) py_path <- ""
 if (!nzchar(py_path)) py_path <- Sys.which("python3")
 if (grepl("WindowsApps", py_path, fixed = TRUE)) py_path <- ""
@@ -60,24 +63,23 @@ sentiment_pipeline <- transformers$pipeline(
   model = HF_MODEL
 )
 
-# ── 8. Read the first sheet; auto-detect the first character/text column ───────
-input_path  <- "data/raw/Dataset1/Case18_Easyjet.xlsx"
-output_path <- "data/raw/Dataset1/Case18_EasyJet_Sentiment.xlsx"
+# ── 8. Read the second sheet; use the second column for comments ───────────────
+input_path  <- "data/Dataset1/Case18_Easyjet.xlsx"
+output_path <- "outputs/Case18_EasyJet_Sentiment.xlsx"
 
 stopifnot("Input and output paths must differ" =
             normalizePath(input_path,  mustWork = FALSE) !=
             normalizePath(output_path, mustWork = FALSE))
 
-sheet_name <- excel_sheets(input_path)[2]   # always the second sheet
+sheet_name <- excel_sheets(input_path)[2]
 df         <- read_excel(input_path, sheet = sheet_name)
 
-comment_col_idx  <- 2                        # always the second column
+comment_col_idx  <- 2
 comment_col_name <- names(df)[comment_col_idx]
 cat("Sheet used       :", sheet_name, "\n")
-cat("Comment column   :", comment_col_name,
-    "(column index", comment_col_idx, ")\n")
+cat("Comment column   :", comment_col_name, "(column index", comment_col_idx, ")\n")
 
-# ── 9. Run the pipeline; extract plain labels and percentage scores ─────────────
+# ── 9. Run the pipeline; extract plain labels and percentage scores ────────────
 comments <- as.character(df[[comment_col_idx]])
 comments[is.na(comments) | nchar(trimws(comments)) == 0] <- "."
 
@@ -91,24 +93,23 @@ cat("\nSentiment distribution:\n")
 print(table(labels))
 
 # ── 10. Open original workbook; append Sentiment_Label and Confidence_% ────────
-wb <- loadWorkbook(input_path)   # preserves all existing formatting
+wb <- loadWorkbook(input_path)
 
 label_col <- comment_col_idx + 2
 conf_col  <- comment_col_idx + 3
 
-# Headers in row 1
 writeData(wb, sheet = sheet_name, x = "Sentiment_Label",
           startCol = label_col, startRow = 1, colNames = FALSE)
 writeData(wb, sheet = sheet_name, x = "Confidence_%",
           startCol = conf_col,  startRow = 1, colNames = FALSE)
 
-# Values starting in row 2
 writeData(wb, sheet = sheet_name, x = data.frame(labels),
           startCol = label_col, startRow = 2, colNames = FALSE)
 writeData(wb, sheet = sheet_name, x = data.frame(confidence_pct),
           startCol = conf_col,  startRow = 2, colNames = FALSE)
 
 # ── 11. Save as a new file — never overwrite the input ────────────────────────
+dir.create("outputs", showWarnings = FALSE, recursive = TRUE)
 saveWorkbook(wb, file = output_path, overwrite = TRUE)
 cat("\nSaved output workbook:", output_path, "\n")
 
@@ -120,3 +121,5 @@ if (file.exists(output_path)) {
 } else {
   stop("Output file was NOT created — check path and permissions.")
 }
+
+cat("\nSentiment classification completed. Use exploratory_analysis.R for Task 2.1.2.\n")
