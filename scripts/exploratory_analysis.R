@@ -106,6 +106,7 @@ custom_stopwords <- c(
 
 clean_text <- function(text) {
   text <- tolower(text)
+  text <- gsub("—|–|―", " ", text)
   text <- removePunctuation(text)
   text <- removeNumbers(text)
   text <- removeWords(text, custom_stopwords)
